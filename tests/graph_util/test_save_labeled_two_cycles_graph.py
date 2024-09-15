@@ -3,7 +3,7 @@ import cfpq_data
 from pathlib import Path
 import networkx
 import pydot
-from project.graph import save_labeled_two_cycles_graph
+from project.graph_util import save_labeled_two_cycles_graph
 
 
 def test_saving(tmpdir):

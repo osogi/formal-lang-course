@@ -1,5 +1,5 @@
 import pytest
-from project.graph import get_graph_data
+from project.graph_util import get_graph_data
 
 
 def test_bzip_graph():
