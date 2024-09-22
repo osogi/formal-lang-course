@@ -16,6 +16,8 @@ class AdjacencyMatrixFA:
         self.fin_states: Set[State] = final_states
         self.states_count = len(state_to_index)
         self.state_to_index = state_to_index
+
+        # TODO: maybe should be changed to function, but i am lazy
         self.bool_decomp = bool_decomp
 
     def _from_nfa(self, fa: NondeterministicFiniteAutomaton):
@@ -111,6 +113,7 @@ class AdjacencyMatrixFA:
         if matrix is None:
             return True
 
+        # TODO: it can be optimized
         for _ in range(self.states_count):
             matrix += matrix @ matrix
 
@@ -120,3 +123,59 @@ class AdjacencyMatrixFA:
                     return False
 
         return True
+
+
+def tensor_dot(m1: sparse.csc_array, m2: sparse.csc_array) -> sparse.csc_array:
+    row_ind: List[int] = []
+    col_ind: List[int] = []
+
+    for i1 in range(m1.shape[0]):
+        for j1 in range(m1.shape[1]):
+            for i2 in range(m2.shape[0]):
+                for j2 in range(m2.shape[1]):
+                    if (m1[i1, j1]) and (m2[i2, j2]):
+                        row_ind.append(i1 + i2 * m1.shape[0])
+                        col_ind.append(j1 + j2 * m1.shape[1])
+
+    data = [True] * len(row_ind)
+    return sparse.csc_array(
+        (data, (row_ind, col_ind)),
+        (m1.shape[0] * m2.shape[0], m1.shape[1] * m2.shape[1]),
+    )
+
+
+def intersect_automata(
+    automaton1: AdjacencyMatrixFA, automaton2: AdjacencyMatrixFA
+) -> AdjacencyMatrixFA:
+    symbs1 = set(automaton1.bool_decomp.keys())
+    symbs2 = set(automaton2.bool_decomp.keys())
+    symbs = symbs1.intersection(symbs2)
+
+    bool_decomp: Dict[Symbol, sparse.csc_array] = {}
+
+    for symb in symbs:
+        m1 = automaton1.bool_decomp[symb]
+        m2 = automaton2.bool_decomp[symb]
+        bool_decomp[symb] = tensor_dot(m1, m2)
+
+    def state_intersection(st1: Set[State], st2: Set[State]) -> Set[State]:
+        st: Set[State] = set()
+        for s1 in st1:
+            for s2 in st2:
+                st.add(State((s1.value, s2.value)))
+        return st
+
+    start_states = state_intersection(automaton1.st_states, automaton2.st_states)
+    final_states = state_intersection(automaton1.fin_states, automaton2.fin_states)
+    state_to_index: Dict[State, int] = {}
+
+    for s1 in automaton1.state_to_index.keys():
+        for s2 in automaton2.state_to_index.keys():
+            st = State((s1.value, s2.value))
+            index = (
+                automaton1.state_to_index[s1]
+                + automaton2.state_to_index[s2] * automaton1.states_count
+            )
+            state_to_index[st] = index
+
+    return AdjacencyMatrixFA((bool_decomp, start_states, final_states, state_to_index))
