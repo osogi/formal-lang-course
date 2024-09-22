@@ -66,7 +66,7 @@
     def is_empty(self) -> bool:
       pass
     ```
-- [ ] Используя [разреженные матрицы из sciPy](https://docs.scipy.org/doc/scipy/reference/sparse.html) реализовать **функцию** пересечения двух конечных автоматов через тензорное произведение.
+- [x] Используя [разреженные матрицы из sciPy](https://docs.scipy.org/doc/scipy/reference/sparse.html) реализовать **функцию** пересечения двух конечных автоматов через тензорное произведение.
   - Требуемая функция:
      ```python
     def intersect_automata(automaton1: AdjacencyMatrixFA,
