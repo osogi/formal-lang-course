@@ -5,14 +5,26 @@ from scipy import sparse
 
 
 class AdjacencyMatrixFA:
-    def __init__(self, fa: NondeterministicFiniteAutomaton) -> None:
+    def _construct(
+        self,
+        bool_decomp: Dict[Symbol, sparse.csc_array],
+        start_states: Set[State],
+        final_states: Set[State],
+        state_to_index: dict[State, int],
+    ):
+        self.st_states: Set[State] = start_states
+        self.fin_states: Set[State] = final_states
+        self.states_count = len(state_to_index)
+        self.state_to_index = state_to_index
+        self.bool_decomp = bool_decomp
+
+    def _from_nfa(self, fa: NondeterministicFiniteAutomaton):
         symbols: Set[Symbol] = fa.symbols
         states: Set[State] = fa.states
-
-        self.st_states: Set[State] = fa.start_states
-        self.fin_states: Set[State] = fa.final_states
-        self.states_count = len(states)
-        self.state_to_index = dict(zip(states, range(self.states_count)))
+        st_states: Set[State] = fa.start_states
+        fin_states: Set[State] = fa.final_states
+        states_count = len(states)
+        state_to_index = dict(zip(states, range(states_count)))
 
         buf_bool_decomp: Dict[Symbol, Tuple[List[int], List[int]]] = {}
 
@@ -29,18 +41,34 @@ class AdjacencyMatrixFA:
 
             if symb is not None:
                 srcs, dests = buf_bool_decomp[symb]
-                srcs.append(self.state_to_index[src])
-                dests.append(self.state_to_index[dest])
+                srcs.append(state_to_index[src])
+                dests.append(state_to_index[dest])
 
-        self.bool_decomp: Dict[Symbol, sparse.csc_array] = {}
+        bool_decomp: Dict[Symbol, sparse.csc_array] = {}
 
         for symb in symbols:
             lists = buf_bool_decomp[symb]
-            self.bool_decomp[symb] = sparse.csc_array(
+            bool_decomp[symb] = sparse.csc_array(
                 ([True] * len(lists[0]), lists),
-                shape=(self.states_count, self.states_count),
+                shape=(states_count, states_count),
                 dtype=bool,
             )
+
+        self._construct(bool_decomp, st_states, fin_states, state_to_index)
+
+    def __init__(
+        self,
+        arg: (
+            NondeterministicFiniteAutomaton
+            | Tuple[
+                Dict[Symbol, sparse.csc_array], Set[State], Set[State], dict[State, int]
+            ]
+        ),
+    ) -> None:
+        if isinstance(arg, NondeterministicFiniteAutomaton):
+            self._from_nfa(arg)
+        else:
+            self._construct(*arg)
 
     def create_start_vector(self) -> sparse.csc_array:
         st_ind = [self.state_to_index[st] for st in self.st_states]
