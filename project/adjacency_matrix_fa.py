@@ -144,8 +144,8 @@ def tensor_dot(m1: sparse.csc_array, m2: sparse.csc_array) -> sparse.csc_array:
             for i2 in range(m2.shape[0]):
                 for j2 in range(m2.shape[1]):
                     if (m1[i1, j1]) and (m2[i2, j2]):
-                        row_ind.append(i1 + i2 * m1.shape[0])
-                        col_ind.append(j1 + j2 * m1.shape[1])
+                        row_ind.append(i1 * m2.shape[0] + i2)
+                        col_ind.append(j1 * m2.shape[1] + j2)
 
     data = [True] * len(row_ind)
     return sparse.csc_array(
@@ -183,8 +183,8 @@ def intersect_automata(
         for s2 in automaton2.state_to_index.keys():
             st = State((s1.value, s2.value))
             index = (
-                automaton1.state_to_index[s1]
-                + automaton2.state_to_index[s2] * automaton1.states_count
+                automaton1.state_to_index[s1] * automaton2.states_count
+                + automaton2.state_to_index[s2]
             )
             state_to_index[st] = index
 
