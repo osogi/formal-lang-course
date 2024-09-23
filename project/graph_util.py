@@ -8,6 +8,9 @@ from pyformlang.finite_automaton import (
     State,
 )
 
+from project.regex_util import regex_to_dfa
+from project.adjacency_matrix_fa import AdjacencyMatrixFA, intersect_automata
+
 
 @dataclass
 class GraphInfo:
@@ -61,3 +64,27 @@ def graph_to_nfa(
         nfa.add_final_state(State(fs))
 
     return nfa.remove_epsilon_transitions()
+
+
+def tensor_based_rpq(
+    regex: str, graph: nx.MultiDiGraph, start_nodes: Set[int], final_nodes: set[int]
+) -> Set[Tuple[int, int]]:
+    regex_fa = regex_to_dfa(regex)
+    graph_fa = graph_to_nfa(graph, start_nodes, final_nodes)
+
+    regex_mfa = AdjacencyMatrixFA(regex_fa)
+    graph_mfa = AdjacencyMatrixFA(graph_fa)
+    res_mfa = intersect_automata(regex_mfa, graph_mfa)
+
+    result_set: Set[Tuple[int, int]] = set()
+
+    closure = res_mfa.full_transitive_closure()
+    if closure is None:
+        return result_set
+
+    for st in res_mfa.st_states:
+        for fin in res_mfa.fin_states:
+            if closure[res_mfa.state_to_index[st], res_mfa.state_to_index[fin]]:
+                result_set.add((st.value[1], fin.value[1]))
+
+    return result_set
