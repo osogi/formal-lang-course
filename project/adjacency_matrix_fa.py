@@ -111,11 +111,14 @@ class AdjacencyMatrixFA:
             else:
                 matrix += self.bool_decomp[symb]
         if matrix is None:
-            return matrix
+            matrix = numpy.zeros((self.states_count, self.states_count), bool)
+
+        for i in range(matrix.shape[0]):
+            matrix[i, i] = True
 
         # TODO: it can be optimized
         for _ in range(self.states_count):
-            matrix += matrix @ matrix
+            matrix = matrix @ matrix
 
         return matrix
 
