@@ -102,7 +102,7 @@ class AdjacencyMatrixFA:
 
         return False
 
-    def is_empty(self) -> bool:
+    def full_transitive_closure(self) -> numpy.ndarray | None:
         matrix: numpy.ndarray | None = None
 
         for symb in self.bool_decomp.keys():
@@ -111,11 +111,18 @@ class AdjacencyMatrixFA:
             else:
                 matrix += self.bool_decomp[symb]
         if matrix is None:
-            return True
+            return matrix
 
         # TODO: it can be optimized
         for _ in range(self.states_count):
             matrix += matrix @ matrix
+
+        return matrix
+
+    def is_empty(self) -> bool:
+        matrix = self.full_transitive_closure()
+        if matrix is None:
+            return True
 
         for start in self.st_states:
             for fin in self.fin_states:
