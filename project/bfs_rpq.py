@@ -71,16 +71,19 @@ def add_paths_from_matrix(
     if len(l_inds) < 1:
         return
 
-    m_rows: Set[int] = set()
+    m_row2col: Dict[int, int] = {}
     for m_ind in l_inds:
-        m_rows.add(nz_row[m_ind])
+        m_row = nz_row[m_ind]
         m_col = nz_col[m_ind]
+        m_row2col[m_row] = m_col
 
     for i in range(len(nz_row)):
         row = nz_row[i]
         col = nz_col[i]
 
-        if row in m_rows:  # maybe excessive
+        m_col = m_row2col.get(row)
+
+        if m_col is not None:
             res_row_ind.append(start_state_num * k + m_col)
             res_col_ind.append(col)
 
