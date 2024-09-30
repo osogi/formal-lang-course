@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import numpy
 from scipy import sparse
 from typing import Dict, Iterable, Set, Tuple
@@ -52,10 +51,46 @@ def init_front(
     return front
 
 
-def move_front(
-    f: sparse.csr_array, bool_decomp: Dict[Symbol, sparse.csc_array]
+def extract_part_by_statrt_state(
+    matr: sparse.csr_array, k: int, start_state_num: int = 1
 ) -> sparse.csr_array:
-    k = f.shape[0]
+    return matr[start_state_num * k : (start_state_num + 1) * k, :]  # noqa: E203
+
+
+def add_paths_from_matrix(
+    res_row_ind: list[int],
+    res_col_ind: list[int],
+    matr: sparse.csr_array,
+    start_state_num: int = 0,
+):
+    k = matr.shape[0]
+    nz_row, nz_col = matr.nonzero()
+
+    l_inds = numpy.where(nz_col < k)[0]
+
+    if len(l_inds) < 1:
+        return
+
+    m_rows: Set[int] = set()
+    for m_ind in l_inds:
+        m_rows.add(nz_row[m_ind])
+        m_col = nz_col[m_ind]
+
+    for i in range(len(nz_row)):
+        row = nz_row[i]
+        col = nz_col[i]
+
+        if row in m_rows:  # maybe excessive
+            res_row_ind.append(start_state_num * k + m_col)
+            res_col_ind.append(col)
+
+
+def move_front(
+    f: sparse.csr_array,
+    bool_decomp: Dict[Symbol, sparse.csc_array],
+    start_state_count: int = 1,
+) -> sparse.csr_array:
+    k = f.shape[0] // start_state_count
     res_row_ind = []
     res_col_ind = []
 
@@ -63,28 +98,10 @@ def move_front(
         matr = bool_decomp[symb]
 
         r = f @ matr
-        nz_row, nz_col = r.nonzero()
-
-        l_inds = numpy.where(nz_col < k)[0]
-
-        if len(l_inds) < 1:
-            continue
-        if len(l_inds) > 1:
-            raise ValueError(
-                "Expected to receive only one element on the left side of the front."
+        for i in range(start_state_count):
+            add_paths_from_matrix(
+                res_row_ind, res_col_ind, extract_part_by_statrt_state(r, k, i), i
             )
-
-        m_ind = l_inds[0]
-        m_row = nz_row[m_ind]
-        m_col = nz_col[m_ind]
-
-        for i in range(len(nz_row)):
-            row = nz_row[i]
-            col = nz_col[i]
-
-            if m_row == row:  # maybe excessive
-                res_row_ind.append(m_col)
-                res_col_ind.append(col)
 
     data = [True] * len(res_row_ind)
     new_front = sparse.csr_array(
@@ -126,53 +143,46 @@ def ms_bfs_based_rpq(
     k = regex_mfa.states_count
     n = graph_mfa.states_count
 
-    @dataclass
-    class BfsState:
-        front: sparse.csr_array
-        visited: sparse.csr_array
-        end: bool = False
+    f_list = []
+    visited_list = []
+    start_state_ind_to_num: Dict[int, int] = {}
 
-    # maybe it is better to use some scipy instruments for example import sparse.hstack
-    bfs_states: Dict[int, BfsState] = {}
-
+    start_state_num = 0
     for st_ind in graph_start_states:
-        f = init_front(
+        buf_f = init_front(
             reg_start_state,
             k,
             {st_ind},
             n,
         )
-        visited: sparse.csr_array = f[:, k:]
-        bfs_states[st_ind] = BfsState(f, visited)
+        buf_visited: sparse.csr_array = buf_f[:, k:]
+        f_list.append(buf_f)
+        visited_list.append(buf_visited)
+
+        start_state_ind_to_num[st_ind] = start_state_num
+        start_state_num += 1
+
+    f: sparse.csr_array = sparse.vstack(f_list, "csr")
+    visited: sparse.csr_array = sparse.vstack(visited_list, "csr")
+    start_state_count = len(graph_start_states)
 
     bd = direct_sum_bool_decomp(regex_mfa.bool_decomp, graph_mfa.bool_decomp)
 
-    is_front_moved = True
-    while is_front_moved:
-        is_front_moved = False
-
-        for st_ind in bfs_states.keys():
-            bfs_st = bfs_states[st_ind]
-            if not bfs_st.end:
-                is_front_moved = True
-                bfs_st.front = move_front(bfs_st.front, bd)
-                bfs_st.front[:, k:] = csr_array_remove(
-                    bfs_st.front[:, k:], bfs_st.visited
-                )
-                bfs_st.visited = bfs_st.visited + bfs_st.front[:, k:]
-
-                if (bfs_st.front[:, k:]).size == 0:
-                    bfs_st.end = True
+    while (f[:, k:]).size > 0:
+        f = move_front(f, bd, start_state_count=start_state_count)
+        f[:, k:] = csr_array_remove(f[:, k:], visited)
+        visited = visited + f[:, k:]
 
     reg_final_ind = [regex_mfa.state_to_index[st] for st in regex_mfa.fin_states]
     for start in graph_mfa.st_states:
         for final in graph_mfa.fin_states:
             start_ind = graph_mfa.state_to_index[start]
             final_ind = graph_mfa.state_to_index[final]
+            start_num = start_state_ind_to_num[start_ind]
 
-            visited = bfs_states[start_ind].visited
+            buf_visited = extract_part_by_statrt_state(visited, k, start_num)
             for i in reg_final_ind:
-                if visited[i, final_ind]:
+                if buf_visited[i, final_ind]:
                     result_set.add((start.value, final.value))
                     break
 
