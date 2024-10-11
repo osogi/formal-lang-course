@@ -1,5 +1,4 @@
 from typing import Dict, Iterable, List, Set, Tuple
-import numpy
 from pyformlang.finite_automaton import NondeterministicFiniteAutomaton, State, Symbol
 from scipy import sparse
 
@@ -102,30 +101,19 @@ class AdjacencyMatrixFA:
 
         return False
 
-    def full_transitive_closure(self) -> numpy.ndarray | None:
-        matrix: numpy.ndarray | None = None
+    def full_transitive_closure(self) -> sparse.csc_array:
+        col_row_ind = list(range(self.states_count))
+        data = [True] * len(col_row_ind)
 
+        matrix = sparse.csc_array((data, (col_row_ind, col_row_ind)))
         for symb in self.bool_decomp.keys():
-            if matrix is None:
-                matrix = self.bool_decomp[symb].toarray()
-            else:
-                matrix += self.bool_decomp[symb]
-        if matrix is None:
-            matrix = numpy.zeros((self.states_count, self.states_count), bool)
-
-        for i in range(matrix.shape[0]):
-            matrix[i, i] = True
-
-        # TODO: it can be optimized
-        for _ in range(self.states_count):
-            matrix = matrix @ matrix
+            matrix += self.bool_decomp[symb]
+        matrix = matrix_bin_power(matrix, self.states_count)
 
         return matrix
 
     def is_empty(self) -> bool:
         matrix = self.full_transitive_closure()
-        if matrix is None:
-            return True
 
         for start in self.st_states:
             for fin in self.fin_states:
@@ -133,6 +121,19 @@ class AdjacencyMatrixFA:
                     return False
 
         return True
+
+
+def matrix_bin_power(m: sparse.csc_array, p: int) -> sparse.csc_array:
+    result = m
+    buf = m
+
+    while p >= 1:
+        if p % 2 == 1:
+            result = result @ buf
+        buf = buf @ buf
+        p //= 2
+
+    return result
 
 
 def tensor_dot(m1: sparse.csc_array, m2: sparse.csc_array) -> sparse.csc_array:
