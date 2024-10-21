@@ -53,7 +53,11 @@ def hellings_solver_scope():
                 for node in nodes:
                     new_edges.append((node, node, {label_name: var}))
 
-            return nx.MultiDiGraph(new_edges)
+            res_graph = nx.MultiDiGraph(new_edges)
+            for node in nodes:
+                res_graph.add_node(node)
+
+            return res_graph
 
         def _process_cfg(self, cfg: pycfg.CFG) -> pycfg.CFG:
             cfg = cfg_to_weak_normal_form(cfg)
@@ -130,7 +134,7 @@ def hellings_solver_scope():
                 pc = work_set.pop()
                 is_changed = self.step(pc)
                 if is_changed:
-                    for npc in self.var2dependent[pc.head]:
+                    for npc in self.var2dependent.get(pc.head, set()):
                         work_set.add(npc)
 
         def solve_reach(
