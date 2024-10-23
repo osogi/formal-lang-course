@@ -1,6 +1,6 @@
 """
 Be careful when using this module, it was written for my one case only
-And it is cringe
+And it is very VERY cringe
 """
 
 import ast
@@ -22,9 +22,23 @@ class MatrixReplacer(ast.NodeTransformer):
         old = node.attr
         new = self.f_old2new.get(old)
         if new is not None:
-            node.attr = new
+            if new != ("dok" + FUN_SUF):
+                node.attr = new
         self.generic_visit(node)
         return node
+
+    def visit_Call(self, node: ast.Call) -> Any:
+        res_node = node
+        func = node.func
+        if isinstance(func, ast.Attribute):
+            func_name = func.attr
+            c_func = self.f_old2new.get(func_name)
+            if c_func == ("dok" + FUN_SUF):
+                new_attr = ast.Attribute(node, "todok", ast.Load())
+                res_node = ast.Call(new_attr, [], [])
+                ast.fix_missing_locations(res_node)
+        self.generic_visit(node)
+        return res_node
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> Any:
         mod = node.module
@@ -65,7 +79,6 @@ def replace_matrix(
 
     patcher = MatrixReplacer(f_old2new, old2new)
     tree = patcher.visit(tree)
-
     code = compile(tree, p_module, "exec")
 
     if module is None:
@@ -76,3 +89,6 @@ def replace_matrix(
         replace_matrix(Path(module2file(mod, prefix)), old2new, module)
 
     return module
+
+
+# replace_matrix(Path("./project/adjacency_matrix_fa.py"), {"csc": "dok"})
