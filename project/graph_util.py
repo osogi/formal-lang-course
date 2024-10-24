@@ -79,8 +79,6 @@ def tensor_based_rpq(
     result_set: Set[Tuple[int, int]] = set()
 
     closure = res_mfa.full_transitive_closure()
-    if closure is None:
-        return result_set
 
     for st in res_mfa.st_states:
         for fin in res_mfa.fin_states:
