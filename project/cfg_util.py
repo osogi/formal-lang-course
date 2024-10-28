@@ -193,3 +193,70 @@ def matrix_based_cfpq(
 
     s = MatrixCFPQSolver(cfg, graph)
     return s.solve_reach(start_nodes, final_nodes)
+
+
+class HellingsCFPQSolver(CFGSolverTemaplate):
+    def __init__(self, cfg: pycfg.CFG, graph: nx.DiGraph):
+        super().__init__(cfg, graph)
+        cfg = self.process_cfg(cfg)
+        self.start_var = cfg.start_symbol
+
+        graph = self.rebuild_graph(graph)
+        self.unprocessed_reach = set(graph.edges(data=LABEL_NAME))
+        self.result_reach = set()
+
+    def step(self, from_to_var):
+        if from_to_var not in self.result_reach:
+            self.result_reach.add(from_to_var)
+
+            for r_from_to_var in self.result_reach:
+                if from_to_var[1] == r_from_to_var[0]:
+                    vars = self.vars2Vars.get((from_to_var[2], r_from_to_var[2]), set())
+                    for v in vars:
+                        self.unprocessed_reach.add(
+                            (from_to_var[0], r_from_to_var[1], v)
+                        )
+
+                if r_from_to_var[1] == from_to_var[0]:
+                    vars = self.vars2Vars.get((r_from_to_var[2], from_to_var[2]), set())
+                    for v in vars:
+                        self.unprocessed_reach.add(
+                            (r_from_to_var[0], from_to_var[1], v)
+                        )
+
+    def update_reach(self):
+        while self.unprocessed_reach != set():
+            self.step(self.unprocessed_reach.pop())
+
+    def solve_reach(
+        self,
+        from_nodes: Set[int],
+        to_nodes: Set[int],
+    ) -> Set[Tuple[int, int]]:
+        self.update_reach()
+        res = set()
+
+        for triple in self.result_reach:
+            if triple[2] == self.start_var:
+                if (triple[0] in from_nodes) and (triple[1] in to_nodes):
+                    res.add((triple[0], triple[1]))
+
+        return res
+
+
+def hellings_based_cfpq(
+    cfg: pycfg.CFG,
+    graph: nx.DiGraph,
+    start_nodes: Set[int] | None = None,
+    final_nodes: Set[int] | None = None,
+) -> Set[Tuple[int, int]]:
+    if (start_nodes is None) or (start_nodes == set()):
+        start_nodes = set(graph.nodes())
+
+    if (final_nodes is None) or (final_nodes == set()):
+        final_nodes = set(graph.nodes())
+
+    s = HellingsCFPQSolver(cfg, graph)
+    res = s.solve_reach(start_nodes, final_nodes)
+
+    return res
