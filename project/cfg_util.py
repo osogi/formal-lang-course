@@ -22,7 +22,7 @@ def cfg_to_weak_normal_form(cfg: pycfg.CFG) -> pycfg.CFG:
     return pycfg.CFG(start_symbol=cfg.start_symbol, productions=cfg_prod)
 
 
-def hellings_solver_scope():
+def matrix_cfpq_solver_scope():
     label_name = "label"
 
     var_t: TypeAlias = pycfg.Variable
@@ -35,7 +35,7 @@ def hellings_solver_scope():
         b1: var_t
         b2: var_t
 
-    class HellingsSolver:
+    class MatrixCFPQSolver:
         def rebuild_graph(self, graph: nx.DiGraph) -> nx.MultiDiGraph:
             nodes = graph.nodes()
             edges = graph.edges(data=True)
@@ -155,13 +155,13 @@ def hellings_solver_scope():
 
             return res
 
-    return HellingsSolver
+    return MatrixCFPQSolver
 
 
-HellingsSolver = hellings_solver_scope()
+MatrixCFPQSolver = matrix_cfpq_solver_scope()
 
 
-def hellings_based_cfpq(
+def matrix_based_cfpq(
     cfg: pycfg.CFG,
     graph: nx.DiGraph,
     start_nodes: Set[int] | None = None,
@@ -173,5 +173,5 @@ def hellings_based_cfpq(
     if (final_nodes is None) or (final_nodes == set()):
         final_nodes = set(graph.nodes())
 
-    s = HellingsSolver(cfg, graph)
+    s = MatrixCFPQSolver(cfg, graph)
     return s.solve_reach(start_nodes, final_nodes)
