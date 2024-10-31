@@ -1,12 +1,18 @@
 from dataclasses import dataclass
-from typing import Dict, Set, Tuple, TypeAlias
+from typing import Dict, List, Set, Tuple, TypeAlias
 from pyformlang.finite_automaton import Symbol, State
+from pyformlang import rsa
+from scipy import sparse
 from scipy.sparse import csc_array
 import pyformlang.cfg as pycfg
 import networkx as nx
 
-from project.adjacency_matrix_fa import AdjacencyMatrixFA
+from project.adjacency_matrix_fa import (
+    AdjacencyMatrixFA,
+    intersect_automata,
+)
 from project.graph_util import graph_to_nfa
+from project.rsm_util import get_symbol_spec_states, rsm_to_nfa
 
 LABEL_NAME = "label"
 var_t: TypeAlias = pycfg.Variable
@@ -258,5 +264,117 @@ def hellings_based_cfpq(
 
     s = HellingsCFPQSolver(cfg, graph)
     res = s.solve_reach(start_nodes, final_nodes)
+
+    return res
+
+
+def tensor_based_cfpq(
+    rsm: rsa.RecursiveAutomaton,
+    graph: nx.DiGraph,
+    start_nodes: Set[int] | None = None,
+    final_nodes: Set[int] | None = None,
+) -> Set[Tuple[int, int]]:
+    symbol_to_spec_states = get_symbol_spec_states(rsm)
+    rsm_fa = rsm_to_nfa(rsm)
+    rsm_mfa = AdjacencyMatrixFA(rsm_fa)
+    rsm_bd = rsm_mfa.bool_decomp
+
+    graph = nx.MultiDiGraph(graph)
+    graph_fa = graph_to_nfa(graph, start_nodes, final_nodes)
+    graph_mfa = AdjacencyMatrixFA(graph_fa)
+    graph_bd = graph_mfa.bool_decomp
+    for symb in symbol_to_spec_states:
+        if graph_bd.get(symb, None) is None:
+            graph_bd[symb] = csc_array(
+                (graph_mfa.states_count, graph_mfa.states_count), dtype=bool
+            )
+        if rsm_bd.get(symb, None) is None:
+            rsm_bd[symb] = csc_array(
+                (rsm_mfa.states_count, rsm_mfa.states_count), dtype=bool
+            )
+
+    prev_no_null_c = 0
+    cur_no_null_c = -1
+    index_to_state = {}
+
+    def delta(tc: csc_array) -> Dict[Symbol, csc_array]:
+        res_dict = {}
+        buf_dict: Dict[Symbol, Tuple[List, List]] = {}
+        from_inds, to_inds = tc.nonzero()
+
+        def add_to_buf_dict(key, a, b):
+            arrs = buf_dict.get(key)
+            if arrs is None:
+                buf_dict[key] = ([], [])
+                arrs = buf_dict[key]
+            arr1, arr2 = arrs
+            arr1.append(a)
+            arr2.append(b)
+
+        for ind in range(len(from_inds)):
+            from_ind = from_inds[ind]
+            to_ind = to_inds[ind]
+
+            from_st = index_to_state[from_ind]
+            to_st = index_to_state[to_ind]
+
+            (from_symb, from_rsm_st), from_graph_st = from_st.value
+            (to_symb, to_rsm_st), to_graph_st = to_st.value
+            if from_symb != to_symb:
+                raise ValueError("expected the same symbols")
+
+            symb = from_symb
+            ss_set, fs_set = symbol_to_spec_states[symb]
+
+            from_graph_ind = graph_mfa.state_to_index[from_graph_st]
+            to_graph_ind = graph_mfa.state_to_index[to_graph_st]
+
+            if (from_rsm_st in ss_set) and (to_rsm_st in fs_set):
+                add_to_buf_dict(symb, from_graph_ind, to_graph_ind)
+
+        # restore matrixes from arrays
+        for symb in buf_dict:
+            row_ind, col_ind = buf_dict[symb]
+            data = [True] * len(row_ind)
+
+            res_dict[symb] = csc_array(
+                (data, (row_ind, col_ind)),
+                shape=(graph_mfa.states_count, graph_mfa.states_count),
+                dtype=bool,
+            )
+
+        return res_dict
+
+    delta_bd = None
+    while prev_no_null_c != cur_no_null_c:
+        prev_no_null_c = cur_no_null_c
+
+        if delta_bd is None:
+            buf_mfa = intersect_automata(rsm_mfa, graph_mfa)
+            for k in buf_mfa.state_to_index:
+                v = buf_mfa.state_to_index[k]
+                index_to_state[v] = k
+        else:
+            for symb in delta_bd:
+                buf_mfa.bool_decomp[symb] += sparse.kron(
+                    rsm_mfa.bool_decomp[symb], delta_bd[symb], "csc"
+                )
+
+        tc = buf_mfa.full_transitive_closure()
+        delta_bd = delta(tc)
+
+        cur_no_null_c = 0
+        for symb in delta_bd:
+            d = delta_bd[symb]
+            graph_bd[symb] += d
+            cur_no_null_c += graph_bd[symb].count_nonzero()
+
+    res = set()
+    for ss in graph_mfa.st_states:
+        for fs in graph_mfa.fin_states:
+            from_ind = graph_mfa.state_to_index[ss]
+            to_ind = graph_mfa.state_to_index[fs]
+            if graph_bd[rsm.initial_label][from_ind, to_ind]:
+                res.add((ss, fs))
 
     return res
