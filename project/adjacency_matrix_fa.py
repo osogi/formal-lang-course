@@ -137,22 +137,7 @@ def matrix_bin_power(m: sparse.csc_array, p: int) -> sparse.csc_array:
 
 
 def tensor_dot(m1: sparse.csc_array, m2: sparse.csc_array) -> sparse.csc_array:
-    row_ind: List[int] = []
-    col_ind: List[int] = []
-
-    for i1 in range(m1.shape[0]):
-        for j1 in range(m1.shape[1]):
-            for i2 in range(m2.shape[0]):
-                for j2 in range(m2.shape[1]):
-                    if (m1[i1, j1]) and (m2[i2, j2]):
-                        row_ind.append(i1 * m2.shape[0] + i2)
-                        col_ind.append(j1 * m2.shape[1] + j2)
-
-    data = [True] * len(row_ind)
-    return sparse.csc_array(
-        (data, (row_ind, col_ind)),
-        (m1.shape[0] * m2.shape[0], m1.shape[1] * m2.shape[1]),
-    )
+    return sparse.kron(m1, m2, "csc")
 
 
 def intersect_automata(
