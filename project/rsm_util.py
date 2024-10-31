@@ -1,9 +1,8 @@
 from typing import Dict, Set, Tuple
 from pyformlang import rsa, cfg as pycfg
 from pyformlang.finite_automaton import NondeterministicFiniteAutomaton, Symbol, State
-import networkx as nx
 
-from project.graph_util import graph_to_nfa
+LABEL_NAME = "label"
 
 
 def ebnf_to_rsm(ebnf: str) -> rsa.RecursiveAutomaton:
@@ -15,7 +14,7 @@ def cfg_to_rsm(cfg: pycfg.CFG) -> rsa.RecursiveAutomaton:
 
 
 def rsm_to_nfa(rsm: rsa.RecursiveAutomaton) -> NondeterministicFiniteAutomaton:
-    graph = nx.MultiDiGraph()
+    transitions = []
     start_states = set()
     fin_states = set()
 
@@ -23,11 +22,26 @@ def rsm_to_nfa(rsm: rsa.RecursiveAutomaton) -> NondeterministicFiniteAutomaton:
     for k in boxes:
         v = boxes[k]
         fa = v.dfa
-        graph.update(fa.to_networkx())
-        start_states = start_states.union(fa.start_states)
-        fin_states = fin_states.union(fa.final_states)
 
-    return graph_to_nfa(graph, start_states, fin_states)
+        def new_state(s):
+            return State((k, s))
+
+        ss = set([new_state(s.value) for s in fa.start_states])
+        start_states = start_states.union(ss)
+
+        fs = set([new_state(s.value) for s in fa.final_states])
+        fin_states = fin_states.union(fs)
+
+        trs = fa.to_networkx().edges(data=LABEL_NAME)
+        for t in trs:
+            transitions.append((new_state(t[0]), t[2], new_state(t[1])))
+
+    res: NondeterministicFiniteAutomaton = NondeterministicFiniteAutomaton(
+        start_state=start_states, final_states=fin_states
+    )
+    res.add_transitions(transitions)
+
+    return res
 
 
 def get_symbol_spec_states(
