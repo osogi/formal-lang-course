@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from typing import Dict, List, Set, Tuple, TypeAlias
-from pyformlang.finite_automaton import Symbol, State
+from pyformlang.finite_automaton import Symbol, State, DeterministicFiniteAutomaton
 from pyformlang import rsa
 from scipy import sparse
 from scipy.sparse import csc_array
@@ -378,3 +378,84 @@ def tensor_based_cfpq(
                 res.add((ss, fs))
 
     return res
+
+
+@dataclass
+class RsmState:
+    var: Symbol
+    sub_state: str
+
+
+@dataclass
+class StateEdges:
+    term_edges: Dict[Symbol, Tuple[RsmState]]
+    var_edges: Dict[Symbol, Tuple[RsmState]]
+
+
+class GllCFPQSolver:
+    def is_term(self, s: str) -> bool:
+        return Symbol(s) not in self.state2edges
+
+    def init_graph_data(self, graph: nx.DiGraph):
+        # Init data for graph traverse
+        edges = graph.edges(data=LABEL_NAME)
+
+        for n in graph.nodes():
+            self.nodes2edges[n] = {}
+
+        for from_n, to_n, symb in edges:
+            if symb is not None:
+                edges = self.nodes2edges[from_n]
+                s: Set = edges.get(symb, set())
+                s.add(to_n)
+                edges[symb] = s
+
+    def init_rsm_data(self, rsm: rsa.RecursiveAutomaton):
+        # Init data for RSM traverse
+        for var in rsm.boxes:
+            self.state2edges[var] = {}
+
+        for var in rsm.boxes:
+            box = rsm.boxes[var]
+            fa: DeterministicFiniteAutomaton = box.dfa
+            gbox = fa.to_networkx()
+
+            sub_dict = self.state2edges[var]
+
+            edges = gbox.edges(data=LABEL_NAME)
+            for from_st, to_st, symb in edges:
+                if symb is not None:
+                    st_edges: StateEdges = sub_dict.get(from_st, StateEdges({}, {}))
+                    if self.isTerm(symb):
+                        st_edges.term_edges[symb] = RsmState(var, to_st)
+                    else:
+                        bfa: DeterministicFiniteAutomaton = rsm.boxes[Symbol(symb)].dfa
+                        box_start = bfa.start_state.value
+                        st_edges.var_edges[symb] = RsmState(Symbol(symb), box_start)
+
+                    sub_dict[from_st] = st_edges
+
+    def __init__(
+        self,
+        rsm: rsa.RecursiveAutomaton,
+        graph: nx.DiGraph,
+    ):
+        self.nodes2edges: Dict[int, Dict[Symbol, Set[int]]] = {}
+        self.state2edges: Dict[Symbol, Dict[str, StateEdges]] = {}
+
+        self.init_graph_data(graph)
+        self.init_rsm_data(rsm)
+
+
+def gll_based_cfpq(
+    rsm: rsa.RecursiveAutomaton,
+    graph: nx.DiGraph,
+    start_nodes: Set[int] | None = None,
+    final_nodes: Set[int] | None = None,
+) -> Set[Tuple[int, int]]:
+    if (start_nodes is None) or (start_nodes == set()):
+        start_nodes = set(graph.nodes())
+    if (final_nodes is None) or (final_nodes == set()):
+        final_nodes = set(graph.nodes())
+
+    raise
