@@ -434,8 +434,8 @@ class GSSNode:
 
 @dataclass
 class StateEdges:
-    term_edges: Dict[Symbol, Tuple[RsmState]]
-    var_edges: Dict[Symbol, Tuple[RsmState]]
+    term_edges: Dict[Symbol, RsmState]
+    var_edges: Dict[Symbol, RsmState]
 
 
 class GllCFPQSolver:
@@ -472,7 +472,7 @@ class GllCFPQSolver:
             for from_st, to_st, symb in edges:
                 if symb is not None:
                     st_edges: StateEdges = sub_dict.get(from_st, StateEdges({}, {}))
-                    if self.isTerm(symb):
+                    if self.is_term(symb):
                         st_edges.term_edges[symb] = RsmState(var, to_st)
                     else:
                         bfa: DeterministicFiniteAutomaton = rsm.boxes[Symbol(symb)].dfa
