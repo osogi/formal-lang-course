@@ -17,6 +17,8 @@ dependencies = [
     "scipy>=1.14.1",
     "grammarinator @ git+https://github.com/renatahodovan/grammarinator.git@f3ffa71",
     "pyformlang>=1.0.7",
+    "ipykernel>=6.29.5",
+    "matplotlib>=3.9.2",
 ]
 readme = "README.md"
 requires-python = ">= 3.10"
