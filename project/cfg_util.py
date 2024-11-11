@@ -1,3 +1,4 @@
+from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Set, Tuple, TypeAlias
 from pyformlang.finite_automaton import Symbol, State, DeterministicFiniteAutomaton
@@ -384,6 +385,51 @@ def tensor_based_cfpq(
 class RsmState:
     var: Symbol
     sub_state: str
+
+
+@dataclass
+class SPPFNode:
+    gss: GSSNode
+    state: RsmState
+    node: int
+
+
+class GSSNode:
+    state: RsmState
+    node: int
+    edges: Dict[RsmState, Set[GSSNode]]
+    pop_set: Set[int]
+
+    def __init__(self, st: RsmState, nd: int):
+        self.state = st
+        self.node = nd
+        self.edges = {}
+        self.pop_set = set()
+
+    def pop(self, cur_node: int) -> Set[SPPFNode]:
+        res_set = set()
+
+        if cur_node not in self.pop_set:
+            for new_st in self.edges:
+                gses = self.edges[new_st]
+                for gs in gses:
+                    res_set.add(SPPFNode(gs, new_st, cur_node))
+
+            self.pop_set.add(cur_node)
+        return res_set
+
+    def add_edge(self, ret_st: RsmState, ptr: GSSNode) -> Set[SPPFNode]:
+        res_set = set()
+
+        st_edges = self.edges.get(ret_st, set())
+        if ptr not in st_edges:
+            st_edges.add(ptr)
+            for cur_node in self.pop_set:
+                res_set.add(SPPFNode(ptr, ret_st, cur_node))
+
+        self.edges[ret_st] = st_edges
+
+        return res_set
 
 
 @dataclass
